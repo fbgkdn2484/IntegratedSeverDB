@@ -6,8 +6,8 @@ using 통합디비;
 var builder = WebApplication.CreateBuilder(args);
 
 // Railway port configuration
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5106";
-builder.WebHost.UseUrls($"http://*:{port}");
+var port = Environment.GetEnvironmentVariable("PORT");
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 // Add services to the container.
 builder.Services.AddRazorPages();
