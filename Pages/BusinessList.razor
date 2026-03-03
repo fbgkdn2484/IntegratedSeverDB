@@ -1,0 +1,700 @@
+@page "/"
+@layout DashboardLayout
+
+<PageTitle>DB 추출 및 영업점수 계산</PageTitle>
+
+<div class="d-flex flex-column pa-2" style="gap: 8px; overflow: hidden; height: calc(100vh - 110px);">
+
+    @* --- 상단 검색 필터 --- *@
+    <MudPaper Class="d-flex align-center pa-2 px-4" Style="background-color: #24242e; border: 1px solid #3d3d4b; gap: 24px; flex-shrink: 0; border-radius: 4px;">
+        <div class="d-flex align-center" style="gap: 8px;">
+            <MudText Typo="Typo.body2" Style="color: #bbb; font-weight: bold; white-space: nowrap;">날짜</MudText>
+            <MudDatePicker @bind-Date="_startDate" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Variant="Variant.Outlined" Style="background-color: #1e1e24; color: white;" Class="search-date-picker" />
+            <MudText Typo="Typo.body2" Style="color: #bbb;">~</MudText>
+            <MudDatePicker @bind-Date="_endDate" DateFormat="yyyy-MM-dd" Margin="Margin.Dense" Variant="Variant.Outlined" Style="background-color: #1e1e24; color: white;" Class="search-date-picker" />
+        </div>
+
+        <div class="d-flex align-center" style="gap: 8px;">
+            <MudText Typo="Typo.body2" Style="color: #bbb; font-weight: bold; white-space: nowrap;">지역</MudText>
+            <MudSelect T="string" @bind-Value="_selectedRegion1" Margin="Margin.Dense" Variant="Variant.Outlined" Dense="true" Style="background-color: #1e1e24; color: white;" Class="search-select">
+                <MudSelectItem Value="@("전국")">전국</MudSelectItem>
+                <MudSelectItem Value="@("서울")">서울</MudSelectItem>
+                <MudSelectItem Value="@("경기")">경기</MudSelectItem>
+                <MudSelectItem Value="@("부산")">부산</MudSelectItem>
+            </MudSelect>
+            <MudSelect T="string" @bind-Value="_selectedRegion2" Margin="Margin.Dense" Variant="Variant.Outlined" Dense="true" Style="background-color: #1e1e24; color: white;" Class="search-select">
+                <MudSelectItem Value="@("전체")">전체</MudSelectItem>
+                <MudSelectItem Value="@("강남구")">강남구</MudSelectItem>
+                <MudSelectItem Value="@("서초구")">서초구</MudSelectItem>
+            </MudSelect>
+        </div>
+
+        <div class="d-flex align-center" style="gap: 8px;">
+            <MudText Typo="Typo.body2" Style="color: #bbb; font-weight: bold; white-space: nowrap;">업종</MudText>
+            <MudSelect T="string" @bind-Value="_selectedIndustry" Margin="Margin.Dense" Variant="Variant.Outlined" Dense="true" Style="background-color: #1e1e24; color: white;" Class="search-select-md">
+                <MudSelectItem Value="@("-전체-")">-전체-</MudSelectItem>
+                <MudSelectItem Value="@("정보통신업")">정보통신업</MudSelectItem>
+                <MudSelectItem Value="@("제조업")">제조업</MudSelectItem>
+                <MudSelectItem Value="@("도소매업")">도소매업</MudSelectItem>
+                <MudSelectItem Value="@("건설업")">건설업</MudSelectItem>
+                <MudSelectItem Value="@("전문과학기술")">전문과학기술</MudSelectItem>
+            </MudSelect>
+        </div>
+
+        <div class="d-flex align-center" style="gap: 8px;">
+            <MudText Typo="Typo.body2" Style="color: #bbb; font-weight: bold; white-space: nowrap;">상호</MudText>
+            <MudTextField @bind-Value="_searchCompanyName" Placeholder="상호명 입력" Margin="Margin.Dense" Variant="Variant.Outlined" Style="background-color: #1e1e24;" Class="search-text-field" />
+        </div>
+    </MudPaper>
+
+    @* --- 메인 패널: 작업 결과 --- *@
+    <MudPaper Class="d-flex flex-column flex-grow-1" Style="min-width: 0; position: relative; background-color: #1e1e24; color: #fff; overflow: hidden; border: 1px solid #3d3d4b;">
+        
+        @* --- 상단 영업 타겟 필터 --- *@
+        <div class="d-flex align-center pa-2" style="background-color: #24242e; border-bottom: 1px solid #3d3d4b; gap: 16px;">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.FilterList" Color="Color.Warning" Size="Size.Small" Class="mr-1" />
+                <MudText Typo="Typo.subtitle2" Style="font-weight: bold; color: #ffb74d; white-space: nowrap;">영업 타겟 필터</MudText>
+            </div>
+            
+            <div class="d-flex align-center flex-wrap" style="gap: 16px;">
+                <MudCheckBox @bind-Checked="_filterSalesScore70" Label="Sales Score 70↑" Color="Color.Error" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterMarketingHigh" Label="Marketing Need 높음" Color="Color.Warning" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterHasHiring" Label="채용 있음" Color="Color.Info" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterNoHomepage" Label="홈페이지 없음" Color="Color.Primary" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterNoSNS" Label="SNS 없음" Color="Color.Primary" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterHasPhone" Label="전화 있음" Color="Color.Success" Dense="true" Class="custom-checkbox ma-0" />
+                <MudCheckBox @bind-Checked="_filterExcludeSafeNum" Label="안심번호 제외" Color="Color.Default" Dense="true" Class="custom-checkbox ma-0" />
+            </div>
+
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" Size="Size.Small" Style="color: #888;" OnClick="ResetFilters">초기화</MudButton>
+        </div>
+        
+        <MudOverlay Visible="_isCalculating" DarkBackground="true" Absolute="true" ZIndex="9999">
+            <div class="d-flex flex-column align-center">
+                <MudProgressCircular Color="Color.Secondary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+                <MudText Typo="Typo.h6" Style="color: white; font-weight: bold;">영업 점수 AI 분석중...</MudText>
+                <MudText Typo="Typo.body2" Style="color: #aaa;" Class="mt-2">마케팅필요도, 확장의지, 디지털 취약도 평가</MudText>
+            </div>
+        </MudOverlay>
+
+        @* 타이틀 & 모드 버튼 *@
+        <div class="d-flex align-center justify-space-between pa-2" style="background-color: #2a2a35; border-bottom: 1px solid #3d3d4b;">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.ListAlt" Color="Color.Info" Size="Size.Small" Class="mr-1" />
+                <MudText Typo="Typo.subtitle2" Style="font-weight: bold; color: #e0e0e0; margin-right: 16px;">추출 리스트 (Core DB)</MudText>
+                
+                @* 모드 전환 버튼 *@
+                <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">
+                    <MudButton OnClick="@(() => _currentMode = "DB")" Variant="@(_currentMode == "DB" ? Variant.Filled : Variant.Outlined)" Color="@(_currentMode == "DB" ? Color.Info : Color.Default)">DB 모드</MudButton>
+                    <MudButton OnClick="@(() => _currentMode = "Analysis")" Variant="@(_currentMode == "Analysis" ? Variant.Filled : Variant.Outlined)" Color="@(_currentMode == "Analysis" ? Color.Secondary : Color.Default)">분석 모드</MudButton>
+                </MudButtonGroup>
+            </div>
+            <div class="d-flex align-center" style="gap: 16px;">
+                 @if (_isExtracting)
+                 {
+                     <MudText Typo="Typo.caption" Color="Color.Info">※ 목록 추출 진행중...</MudText>
+                 }
+                 else if (_isCalculating)
+                 {
+                     <MudText Typo="Typo.caption" Color="Color.Secondary">※ 영업 점수 AI 분석중...</MudText>
+                 }
+                 <MudButton Variant="Variant.Filled" Color="Color.Info" Size="Size.Small">옵션설정</MudButton>
+            </div>
+        </div>
+
+        @* KPI Dashboard Bar *@
+        <div class="d-flex align-center pa-2" style="background-color: #1a1a24; border-bottom: 1px solid #3d3d4b; gap: 8px;">
+            <MudPaper Class="pa-2 d-flex flex-column align-center justify-center flex-grow-1" Style="background-color: #24242e; border: 1px solid #333340; box-shadow: none;">
+                <MudText Typo="Typo.caption" Style="color: #aaa;">전체 업체</MudText>
+                <MudText Typo="Typo.h6" Style="color: #4fc3f7; font-weight: bold;">@TotalFilteredCount <span style="font-size: 12px; color: #888;">개</span></MudText>
+            </MudPaper>
+            <MudPaper Class="pa-2 d-flex flex-column align-center justify-center flex-grow-1" Style="background-color: #24242e; border: 1px solid #333340; box-shadow: none;">
+                <MudText Typo="Typo.caption" Style="color: #aaa;">휴대폰 확보율</MudText>
+                <MudText Typo="Typo.h6" Style="color: #81c784; font-weight: bold;">@MobileRate <span style="font-size: 12px; color: #888;">%</span></MudText>
+            </MudPaper>
+            <MudPaper Class="pa-2 d-flex flex-column align-center justify-center flex-grow-1" Style="background-color: #24242e; border: 1px solid #333340; box-shadow: none;">
+                <MudText Typo="Typo.caption" Style="color: #aaa;">이메일 확보율</MudText>
+                <MudText Typo="Typo.h6" Style="color: #ba68c8; font-weight: bold;">@EmailRate <span style="font-size: 12px; color: #888;">%</span></MudText>
+            </MudPaper>
+            <MudPaper Class="pa-2 d-flex flex-column align-center justify-center flex-grow-1" Style="background-color: rgba(255, 82, 82, 0.05); border: 1px solid rgba(255, 82, 82, 0.2); box-shadow: none;">
+                <MudText Typo="Typo.caption" Style="color: #ff8a65;">확신도 80 이상</MudText>
+                <MudText Typo="Typo.h6" Style="color: #ff5252; font-weight: bold;">@HotLeadsCount <span style="font-size: 12px; color: #888;">개</span></MudText>
+            </MudPaper>
+        </div>
+
+        <div class="d-flex flex-column flex-grow-1" style="min-height: 0; position: relative;">
+            @* 결과 테이블 *@
+            <MudTable T="ResultItem" Items="@FilteredResults" @bind-SelectedItems="_selectedResults" MultiSelection="true" Dense="true" Hover="true" Class="h-100" Style="background-color: #1e1e24; white-space: nowrap;" CustomHeader="true" RowStyleFunc="@GetRowStyle" OnRowClick="@(e => RowClicked(e))" FixedHeader="true" Height="100%">
+                <HeaderContent>
+                    <MudTHeadRow Style="background-color: #2a2a35; border-bottom: 1px solid #3d3d4b;">
+                        @* 구분 컬럼들 (A. 기본 DB 영역) *@
+                        <MudTh Style="color: #4fc3f7; white-space: nowrap; font-weight: bold; border-right: 1px solid #3d3d4b;">기본 정보</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">상호</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">업종</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">주소</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">우편번호</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">사업자번호</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">휴대폰번호</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">전화번호</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap;">이메일</MudTh>
+                    <MudTh Style="color: #b0b0c0; white-space: nowrap; border-right: 1px solid #3d3d4b;">홈페이지</MudTh>
+                    
+                    @* 구분 컬럼들 (B. 점수 영역) *@
+                    <MudTh Style="white-space: nowrap;">
+                        <MudTooltip Placement="Placement.Top">
+                            <ChildContent><span style="color: #ffca28; font-weight: bold; border-bottom: 1px dashed #aaa; cursor: help;">영업점수</span></ChildContent>
+                            <TooltipContent><MudText Typo="Typo.caption">총 점수</MudText></TooltipContent>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh Style="white-space: nowrap;">
+                        <MudTooltip Placement="Placement.Top">
+                            <ChildContent><span style="color: #ffca28; border-bottom: 1px dashed #aaa; cursor: help;">마케팅필요도</span></ChildContent>
+                            <TooltipContent>
+                                <div class="text-left pa-2">
+                                    <MudText Typo="Typo.caption" Style="display: block;">경쟁 업체 수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">리뷰 수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">지역 평균 리뷰 수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">SNS 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">홈페이지 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block; font-weight: bold; color: #ffb74d;">최종 계산식 요약</MudText>
+                                </div>
+                            </TooltipContent>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh Style="white-space: nowrap;">
+                        <MudTooltip Placement="Placement.Top">
+                            <ChildContent><span style="color: #ffca28; border-bottom: 1px dashed #aaa; cursor: help;">확장의지</span></ChildContent>
+                            <TooltipContent>
+                                <div class="text-left pa-2">
+                                    <MudText Typo="Typo.caption" Style="display: block;">최근 채용 공고 수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">채용 등록일</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">지점 키워드 발견 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">배달 플랫폼 신규 입점 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block; font-weight: bold; color: #ffb74d;">점수 가중치 구성</MudText>
+                                </div>
+                            </TooltipContent>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh Style="white-space: nowrap;">
+                        <MudTooltip Placement="Placement.Top">
+                            <ChildContent><span style="color: #ffca28; border-bottom: 1px dashed #aaa; cursor: help;">디지털취약도</span></ChildContent>
+                            <TooltipContent>
+                                <div class="text-left pa-2">
+                                    <MudText Typo="Typo.caption" Style="display: block;">사진 개수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">메뉴 등록 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">예약 기능 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">홈페이지 여부</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">SNS 여부</MudText>
+                                </div>
+                            </TooltipContent>
+                        </MudTooltip>
+                    </MudTh>
+                    <MudTh Style="white-space: nowrap;">
+                        <MudTooltip Placement="Placement.Top">
+                            <ChildContent><span style="color: #ffca28; border-bottom: 1px dashed #aaa; cursor: help;">타이밍</span></ChildContent>
+                            <TooltipContent>
+                                <div class="text-left pa-2">
+                                    <MudText Typo="Typo.caption" Style="display: block;">최근 30일 리뷰 증감률</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">별점 변화</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">경쟁 신규 매장 수</MudText>
+                                    <MudText Typo="Typo.caption" Style="display: block;">최근 채용 종료 여부</MudText>
+                                </div>
+                            </TooltipContent>
+                        </MudTooltip>
+                    </MudTh>
+                </MudTHeadRow>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="기본 정보" Style="color: #555; font-size: 11px; text-align: center; border-right: 1px solid #3d3d4b;">[A]</MudTd>
+                <MudTd DataLabel="상호" Style="color: #e0e0e0; font-size: 12px; font-weight: bold; cursor: pointer;">@context.CompanyName</MudTd>
+                <MudTd DataLabel="업종" Style="color: #888; font-size: 12px; cursor: pointer;">@context.IndustryClass</MudTd>
+                <MudTd DataLabel="주소" Style="color: #888; font-size: 12px; cursor: pointer;">@context.Address</MudTd>
+                <MudTd DataLabel="우편번호" Style="color: #888; font-size: 12px; cursor: pointer;">@context.ZipCode</MudTd>
+                <MudTd DataLabel="사업자번호" Style="color: #888; font-size: 12px; cursor: pointer;">@context.BizNo</MudTd>
+                <MudTd DataLabel="휴대폰번호" Style="color: #e0e0e0; font-size: 12px; cursor: pointer;">@context.Mobile</MudTd>
+                <MudTd DataLabel="전화번호" Style="color: #e0e0e0; font-size: 12px; cursor: pointer;">@context.Phone</MudTd>
+                <MudTd DataLabel="이메일" Style="color: #888; font-size: 12px; cursor: pointer;">@context.Email</MudTd>
+                <MudTd DataLabel="홈페이지" Style="color: #888; font-size: 12px; border-right: 1px solid #3d3d4b; cursor: pointer;">@context.Homepage</MudTd>
+                
+                <MudTd DataLabel="영업점수" Style="font-weight: bold; font-size: 13px; cursor: pointer;">
+                    @if (context.SalesScore.HasValue)
+                    {
+                        @if (context.SalesScore >= 80)
+                        {
+                            <span style="color: #ff5252;">@context.SalesScore</span>
+                        }
+                        else if (context.SalesScore >= 70)
+                        {
+                            <span style="color: #ffb74d;">@context.SalesScore</span>
+                        }
+                        else if (context.SalesScore >= 60)
+                        {
+                            <span style="color: #fff176;">@context.SalesScore</span>
+                        }
+                        else
+                        {
+                            <span style="color: #aaa;">@context.SalesScore</span>
+                        }
+                    }
+                    else
+                    {
+                        <span style="color: #555;">-</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="마케팅필요도" Style="color: #ccc; font-size: 12px; cursor: pointer;">@(context.MarketingNeedScore?.ToString() ?? "-")</MudTd>
+                <MudTd DataLabel="확장의지" Style="color: #ccc; font-size: 12px; cursor: pointer;">@(context.ExpansionScore?.ToString() ?? "-")</MudTd>
+                <MudTd DataLabel="디지털취약도" Style="color: #ccc; font-size: 12px; cursor: pointer;">@(context.DigitalVulnerabilityScore?.ToString() ?? "-")</MudTd>
+                <MudTd DataLabel="타이밍" Style="color: #ccc; font-size: 12px; cursor: pointer;">@(context.TimingScore?.ToString() ?? "-")</MudTd>
+
+            </RowTemplate>
+            <NoRecordsContent>
+                <div style="height: 300px; display: flex; align-items: center; justify-content: center;">
+                    <MudText Typo="Typo.caption" Style="color: #555;">조회된 데이터가 없습니다.</MudText>
+                </div>
+            </NoRecordsContent>
+        </MudTable>
+        </div>
+
+        @* 하단 툴바 *@
+        <div class="d-flex align-center justify-space-between pa-2" style="background-color: #2a2a35; border-top: 1px solid #3d3d4b;">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" Style="color: #4fc3f7; margin-right: 4px;" />
+                <MudText Typo="Typo.caption" Style="color: #e0e0e0;"><strong style="color: #4fc3f7;">@FilteredResults.Count()</strong> 건의 데이터가 검색되었습니다.</MudText>
+            </div>
+            
+            <div class="d-flex align-center" style="gap: 8px;">
+                <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="StartExtraction1" Disabled="@_isExtracting">추출시작</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AutoGraph" OnClick="StartExtraction2" Disabled="@(_resultList.Count == 0 || _isCalculating)">영업 점수 계산</MudButton>
+                <MudButton Variant="Variant.Filled" Style="background-color: #555566; color: white;" OnClick="StopWork" Disabled="@(!_isExtracting && !_isCalculating)">작업정지</MudButton>
+                <MudButton Variant="Variant.Filled" Style="background-color: #555566; color: white;" OnClick="RemoveSelectedResults" Disabled="@(_selectedResults.Count == 0)">선택삭제</MudButton>
+                <MudButton Variant="Variant.Filled" Style="background-color: #555566; color: white;" StartIcon="@Icons.Material.Filled.Download">엑셀저장</MudButton>
+            </div>
+        </div>
+    </MudPaper>
+
+</div>
+
+@* --- 우측 Quick View 드로어 (행 클릭시 열림) --- *@
+<MudDrawer @bind-Open="_isQuickViewOpen" Anchor="Anchor.End" Elevation="3" Variant="DrawerVariant.Temporary" Width="380px" Style="background-color: #1a1a24; border-left: 1px solid #3d3d4b; z-index: 100000;">
+    @if (_selectedItemForView != null)
+    {
+        <div class="pa-4 d-flex flex-column h-100" style="color: #e0e0e0; overflow-y: auto;">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <MudText Typo="Typo.h6" Style="font-weight: bold; color: white;">Sales 퀵뷰</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Inherit" OnClick="@(() => _isQuickViewOpen = false)" Size="Size.Small" />
+            </div>
+            
+            <MudText Typo="Typo.h5" Style="color: #4fc3f7; font-weight: bold;">@_selectedItemForView.CompanyName</MudText>
+            <MudText Typo="Typo.body2" Class="mb-4" Style="color: #aaa;">@_selectedItemForView.IndustryClass | 사업자: @_selectedItemForView.BizNo</MudText>
+
+            @* Sales Score Big Display *@
+            <MudPaper Class="pa-4 mb-4 d-flex flex-column align-center" Style="background-color: #24242e; border: 1px solid #3d3d4b;">
+                <MudText Typo="Typo.subtitle2" Style="color: #bbb;">Total Sales Score</MudText>
+                <MudText Typo="Typo.h2" Style="@GetScoreColorStyle(_selectedItemForView.SalesScore, true)">
+                    @(_selectedItemForView.SalesScore?.ToString() ?? "-")
+                </MudText>
+                @if(_selectedItemForView.SalesScore >= 80)
+                {
+                    <MudChip Color="Color.Error" Size="Size.Small" Class="mt-2 text-uppercase font-weight-bold">Hot Lead</MudChip>
+                }
+            </MudPaper>
+
+            @* 5 Score Bars *@
+            <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: #ddd;">세부 가치 분석</MudText>
+            <div class="mb-5 pa-3 pb-4" style="background-color: #24242e; border: 1px solid #3d3d4b; border-radius: 4px;">
+                @ScoreBarTemplate(("영업점수", _selectedItemForView.SalesScore))
+                @ScoreBarTemplate(("마케팅필요도", _selectedItemForView.MarketingNeedScore))
+                @ScoreBarTemplate(("확장의지", _selectedItemForView.ExpansionScore))
+                @ScoreBarTemplate(("디지털취약도", _selectedItemForView.DigitalVulnerabilityScore))
+                @ScoreBarTemplate(("타이밍", _selectedItemForView.TimingScore))
+            </div>
+
+            @* Meta Info *@
+            <MudText Typo="Typo.subtitle2" Class="mb-2" Style="color: #ddd;">영업 핵심 지표</MudText>
+            <MudPaper Class="pa-3 mb-4" Style="background-color: #24242e; border: 1px solid #3d3d4b;">
+                <div class="d-flex justify-space-between mb-2">
+                    <MudText Typo="Typo.body2" Style="color: #bbb;">리뷰 변화</MudText>
+                    <MudText Typo="Typo.body2" Style="color: #81c784; font-weight: bold;">
+                        @(_selectedItemForView.ReviewTrend >= 0 ? "+" : "")@_selectedItemForView.ReviewTrend 건/월
+                    </MudText>
+                </div>
+                <div class="d-flex justify-space-between mb-2">
+                    <MudText Typo="Typo.body2" Style="color: #bbb;">채용 여부</MudText>
+                    <MudText Typo="Typo.body2" Style="@(_selectedItemForView.HasHiring ? "color: #ffb74d; font-weight: bold;" : "color: #aaa;")">
+                        @(_selectedItemForView.HasHiring ? "채용 진행중" : "없음")
+                    </MudText>
+                </div>
+                <div class="d-flex justify-space-between mb-2">
+                    <MudText Typo="Typo.body2" Style="color: #bbb;">전화번호</MudText>
+                    <div style="text-align: right;">
+                        <MudText Typo="Typo.body2" Style="color: #e0e0e0;">@_selectedItemForView.Phone</MudText>
+                        @if(_selectedItemForView.HasSafeNumber) { <MudText Typo="Typo.caption" Color="Color.Warning">안심번호</MudText> }
+                    </div>
+                </div>
+                <div class="d-flex justify-space-between mb-2">
+                    <MudText Typo="Typo.body2" Style="color: #bbb;">휴대폰번호</MudText>
+                    <MudText Typo="Typo.body2" Style="color: #e0e0e0;">@_selectedItemForView.Mobile</MudText>
+                </div>
+                <div class="d-flex justify-space-between">
+                    <MudText Typo="Typo.body2" Style="color: #bbb;">이메일</MudText>
+                    <MudText Typo="Typo.body2" Style="color: #e0e0e0;">@_selectedItemForView.Email</MudText>
+                </div>
+            </MudPaper>
+
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.SmartToy" FullWidth="true" Class="py-3 mt-4" Style="font-weight: bold; letter-spacing: 1px;">AI 영업 맞춤 스크립트 작성</MudButton>
+        </div>
+    }
+</MudDrawer>
+
+
+
+<style>
+    /* MudTable 스타일 수정: 어두운 테마에 맞게 조정 */
+    .mud-table-root .mud-table-head .mud-table-cell {
+        color: #b0b0c0 !important;
+        padding: 8px 16px;
+    }
+    .mud-table-root .mud-table-body .mud-table-cell {
+        padding: 6px 16px;
+        border-bottom: 1px solid #2a2a35;
+    }
+    .mud-table-row:hover .mud-table-cell {
+        background-color: #2a2a35 !important;
+    }
+    .mud-select-input {
+         color: white !important;
+    }
+    .mud-input>input.mud-input-root-outlined {
+        color: white !important;
+    }
+    
+    /* 상단 검색 필터 너비 조정 */
+    .search-date-picker { width: 140px !important; }
+    .search-select { width: 110px !important; }
+    .search-select-md { width: 140px !important; }
+    .search-text-field { width: 180px !important; }
+    
+    /* 텍스트필드 등 머드블레이저 기본 색상을 어두운 테마용으로 덮어쓰기 */
+    .mud-input-control-input-container {
+        border-radius: 4px;
+        border-color: #555566 !important;
+    }
+    .mud-input-slot {
+        color: white !important;
+    }
+    .mud-popover-provider .mud-popover-cascading-value .mud-list {
+        background-color: #333340 !important;
+        color: white !important;
+    }
+    .custom-checkbox .mud-typography {
+        color: #ddd !important;
+        font-size: 13px;
+    }
+    
+    /* 가로 스크롤 시 스크롤바 디자인 */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #1e1e24; 
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #555566; 
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #777; 
+    }
+</style>
+
+@code {
+    private RenderFragment<(string label, int? score)> ScoreBarTemplate => context => __builder =>
+    {
+        int s = context.score ?? 0;
+        string color = s >= 80 ? "#ff5252" : (s >= 70 ? "#ffb74d" : (s >= 60 ? "#fff176" : "#666"));
+        <div class="d-flex align-center mb-2">
+            <div style="width: 80px; color: #aaa; font-size: 12px;">@context.label</div>
+            <div class="flex-grow-1 mx-3" style="height: 6px; background-color: #333340; border-radius: 3px; overflow: hidden; position: relative;">
+                <div style="position: absolute; left: 0; top: 0; height: 100%; width: @(s)%; background-color: @color; transition: width 0.5s ease;"></div>
+            </div>
+            <div style="width: 30px; text-align: right; color: @color; font-size: 13px; font-weight: bold;">
+                @(s > 0 ? s.ToString() : "-")
+            </div>
+        </div>
+    };
+
+    protected override void OnInitialized()
+    {
+        // 초기 임의 목업 데이터 등록
+        LoadMockData();
+    }
+
+    private void LoadMockData()
+    {
+        var rnd = new Random();
+        string[] industryClasses = { "정보통신업", "전문과학기술", "도소매업", "제조업", "건설업" };
+        string[] locations = { "서울 서초구", "서울 강남구", "판교 테크노밸리", "부산 해운대구", "대전 유성구" };
+        
+        for (int i = 1; i <= 35; i++)
+        {
+            _resultList.Add(new ResultItem
+            {
+                Id = i,
+                CompanyName = $"테스트 파트너스 {i}{(i % 3 == 0 ? "(주)" : "")}",
+                IndustryClass = industryClasses[rnd.Next(industryClasses.Length)],
+                Address = $"{locations[rnd.Next(locations.Length)]} ...",
+                ZipCode = $"06{rnd.Next(100, 999)}",
+                BizNo = $"{rnd.Next(100, 999)}-{rnd.Next(10, 99)}-{rnd.Next(10000, 99999)}",
+                Mobile = i % 4 == 0 ? "" : $"010-{rnd.Next(1000, 9999)}-{rnd.Next(1000, 9999)}",
+                Phone = i % 5 == 0 ? "" : $"02-{rnd.Next(100, 999)}-{rnd.Next(1000, 9999)}",
+                Email = i % 3 == 0 ? "" : $"contact{i}@example.com",
+                Homepage = i % 4 == 0 ? "" : $"www.test{i}.com",
+                
+                // 설정된 초기엔 전부 비움
+                SalesScore = null,
+                MarketingNeedScore = null,
+                ExpansionScore = null,
+                DigitalVulnerabilityScore = null,
+                TimingScore = null,
+                
+                // Quick View / Filter Meta Dummy Data
+                HasHiring = i % 3 == 0,
+                HasSNS = i % 2 == 0,
+                HasSafeNumber = i % 6 == 0,
+                ReviewTrend = rnd.Next(-5, 30),
+            });
+        }
+    }
+
+    private string GetRowStyle(ResultItem item, int index)
+    {
+        if (!item.SalesScore.HasValue) return "";
+        
+        // 80↑ Red, 70↑ Orange, 60↑ Yellow Row tint
+        if (item.SalesScore >= 80) return "background-color: rgba(255, 82, 82, 0.08);";
+        if (item.SalesScore >= 70) return "background-color: rgba(255, 183, 77, 0.08);";
+        if (item.SalesScore >= 60) return "background-color: rgba(255, 241, 118, 0.05);";
+        
+        return "";
+    }
+
+    private string GetScoreColorStyle(int? score, bool isBig = false)
+    {
+        if (!score.HasValue) return "color: #555;"; 
+        if (score >= 80) return isBig ? "color: #ff5252; font-weight: 900;" : "color: #ff5252;";
+        if (score >= 70) return isBig ? "color: #ffb74d; font-weight: 900;" : "color: #ffb74d;";
+        if (score >= 60) return isBig ? "color: #fff176; font-weight: 900;" : "color: #fff176;";
+        return "color: #aaa;";
+    }
+
+    // --- 상단 검색 모듈 ---
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private string _selectedRegion1 = "전국";
+    private string _selectedRegion2 = "전체";
+    private string _selectedIndustry = "-전체-";
+    private string _searchCompanyName = "";
+
+    // --- 필터 패널 변수 ---
+    private bool _filterSalesScore70 = false;
+    private bool _filterMarketingHigh = false;
+    private bool _filterHasHiring = false;
+    private bool _filterNoHomepage = false;
+    private bool _filterNoSNS = false;
+    private bool _filterHasPhone = false;
+    private bool _filterExcludeSafeNum = false;
+
+    private void ResetFilters()
+    {
+        _filterSalesScore70 = false;
+        _filterMarketingHigh = false;
+        _filterHasHiring = false;
+        _filterNoHomepage = false;
+        _filterNoSNS = false;
+        _filterHasPhone = false;
+        _filterExcludeSafeNum = false;
+    }
+
+    // --- 데이터 그리드 ---
+    private List<ResultItem> _resultList = new();
+    private HashSet<ResultItem> _selectedResults = new();
+    
+    private bool _isExtracting = false;
+    private bool _isCalculating = false;
+
+    private string _currentMode = "DB";
+
+    // 필터링된 결과
+    private IEnumerable<ResultItem> FilteredResults
+    {
+        get
+        {
+            var query = _resultList.Where(r => 
+                (!_filterSalesScore70 || (r.SalesScore.HasValue && r.SalesScore.Value >= 70)) &&
+                (!_filterMarketingHigh || (r.MarketingNeedScore.HasValue && r.MarketingNeedScore.Value >= 70)) &&
+                (!_filterHasHiring || r.HasHiring) &&
+                (!_filterNoHomepage || string.IsNullOrWhiteSpace(r.Homepage)) &&
+                (!_filterNoSNS || !r.HasSNS) &&
+                (!_filterHasPhone || !string.IsNullOrWhiteSpace(r.Phone) || !string.IsNullOrWhiteSpace(r.Mobile)) &&
+                (!_filterExcludeSafeNum || !r.HasSafeNumber)
+            );
+
+            if (_currentMode == "Analysis")
+            {
+                return query.OrderByDescending(x => x.SalesScore ?? 0).ThenByDescending(x => x.Id);
+            }
+            else
+            {
+                // DB 모드: 연락처 중심 정렬 (휴대폰 있는 경우 우선)
+                return query.OrderByDescending(x => !string.IsNullOrWhiteSpace(x.Mobile))
+                            .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.Email))
+                            .ThenBy(x => x.Id);
+            }
+        }
+    }
+
+    private int TotalFilteredCount => FilteredResults.Count();
+    private int MobileRate => TotalFilteredCount == 0 ? 0 : (FilteredResults.Count(x => !string.IsNullOrWhiteSpace(x.Mobile)) * 100) / TotalFilteredCount;
+    private int EmailRate => TotalFilteredCount == 0 ? 0 : (FilteredResults.Count(x => !string.IsNullOrWhiteSpace(x.Email)) * 100) / TotalFilteredCount;
+    private int HotLeadsCount => FilteredResults.Count(x => x.SalesScore >= 80);
+
+    // --- Quick View 토글 ---
+    private bool _isQuickViewOpen = false;
+    private ResultItem _selectedItemForView = new ResultItem();
+
+    private void RowClicked(TableRowClickEventArgs<ResultItem> args)
+    {
+        _selectedItemForView = args.Item;
+        _isQuickViewOpen = true;
+    }
+
+    // --- 기능 ---
+    private async Task StartExtraction1()
+    {
+        _isExtracting = true;
+        StateHasChanged();
+
+        await Task.Delay(1500); 
+        
+        var rnd = new Random();
+        int startIndex = _resultList.Count > 0 ? _resultList.Max(x => x.Id) + 1 : 1;
+        
+        string baseKeyword = string.IsNullOrWhiteSpace(_searchCompanyName) ? "테스트" : _searchCompanyName;
+        string industry = _selectedIndustry == "-전체-" ? "일반 기업" : _selectedIndustry;
+
+        int count = rnd.Next(5, 12);
+        for (int i = 0; i < count; i++)
+        {
+            _resultList.Add(new ResultItem
+            {
+                Id = startIndex++,
+                CompanyName = $"{baseKeyword} 솔루션 {i+1}",
+                IndustryClass = industry,
+                Address = $"{_selectedRegion1} {_selectedRegion2} 상세주소...",
+                ZipCode = $"05{rnd.Next(100, 999)}",
+                BizNo = $"{rnd.Next(100, 999)}-{rnd.Next(10, 99)}-{rnd.Next(10000, 99999)}",
+                Mobile = $"010-{rnd.Next(1000, 9999)}-{rnd.Next(1000, 9999)}",
+                Phone = $"02-{rnd.Next(100,999)}-{rnd.Next(1000,9999)}",
+                Email = $"contact@{baseKeyword.ToLower()}.com",
+                Homepage = $"www.{baseKeyword.ToLower()}.com",
+                
+                HasHiring = rnd.Next(2) == 0,
+                HasSNS = rnd.Next(2) == 0,
+                HasSafeNumber = rnd.Next(5) == 0,
+                ReviewTrend = rnd.Next(-2, 25),
+            });
+        }
+
+        _isExtracting = false;
+        StateHasChanged();
+    }
+
+    private async Task StartExtraction2()
+    {
+        if (_resultList.Count == 0 || _isCalculating) return;
+        
+        _isCalculating = true;
+        StateHasChanged();
+
+        await Task.Delay(2500); 
+
+        var rnd = new Random();
+        foreach (var result in _resultList)
+        {
+            result.MarketingNeedScore = rnd.Next(40, 100);
+            result.ExpansionScore = rnd.Next(30, 90);
+            result.DigitalVulnerabilityScore = rnd.Next(50, 95);
+            result.TimingScore = rnd.Next(20, 100);
+            
+            // 종합 점수 계산 (가중치 샘플)
+            int total = (int)(
+                result.MarketingNeedScore.Value * 0.3 +
+                result.DigitalVulnerabilityScore.Value * 0.3 +
+                result.ExpansionScore.Value * 0.2 +
+                result.TimingScore.Value * 0.2
+            );
+            
+            // 확신의 랜덤 플러스 마이너스
+            total += rnd.Next(-5, 6);
+            if (total > 100) total = 100;
+            if (total < 20) total = 20;
+
+            result.SalesScore = total;
+        }
+
+        _isCalculating = false;
+        StateHasChanged();
+    }
+
+    private void StopWork()
+    {
+        _isExtracting = false;
+        _isCalculating = false;
+        StateHasChanged();
+    }
+
+    private void RemoveSelectedResults()
+    {
+        _resultList.RemoveAll(x => _selectedResults.Contains(x));
+        _selectedResults.Clear();
+        int idx = 1;
+        foreach (var item in _resultList) item.Id = idx++;
+    }
+
+    // --- 모델들 ---
+    public class ResultItem
+    {
+        public int Id { get; set; }
+        
+        // 검색된 내용
+        public string CompanyName { get; set; } = "";
+        public string IndustryClass { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string ZipCode { get; set; } = "";
+        public string BizNo { get; set; } = "";
+        public string Mobile { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Homepage { get; set; } = "";
+        
+        // 5가지 점수
+        public int? SalesScore { get; set; }
+        public int? MarketingNeedScore { get; set; }
+        public int? ExpansionScore { get; set; }
+        public int? DigitalVulnerabilityScore { get; set; }
+        public int? TimingScore { get; set; }
+        
+        // 추가 메타
+        public bool HasHiring { get; set; }
+        public bool HasSNS { get; set; }
+        public bool HasSafeNumber { get; set; }
+        public int ReviewTrend { get; set; }
+        
+        public override bool Equals(object? obj) => obj is ResultItem i && i.Id == Id;
+        public override int GetHashCode() => Id.GetHashCode();
+    }
+}
